@@ -1,14 +1,14 @@
 from PyQt6.QtWidgets import QApplication
 from qt_material import apply_stylesheet
 import sys
-from views.main_window import MainWindow  # Asegúrate de tener este import
+from views.login_window import LoginWindow
 
 def main():
     app = QApplication(sys.argv)
 
-    apply_stylesheet(app, theme='dark_teal.xml')  # ✅ Aplica tema material
+    apply_stylesheet(app, theme='dark_teal.xml')
 
-    window = MainWindow()
+    window = LoginWindow()
     window.show()
 
     sys.exit(app.exec())
