@@ -2,16 +2,13 @@ from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QLabel, QVBoxLayout, QHBoxLayout,
     QTableWidget, QTableWidgetItem, QLineEdit, QPushButton, QHeaderView
 )
-from PyQt6.QtGui import QPixmap
-from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QAbstractItemView
-from PyQt6.QtWidgets import QMessageBox
+from PyQt6.QtWidgets import QAbstractItemView, QMessageBox
 from views.input_dialog import CustomReasonDialog
 from controllers.inventory_controller import InventoryController as iv
 from PyQt6.QtWidgets import QStyledItemDelegate
 
-from PyQt6.QtGui import QIcon
-from PyQt6.QtCore import QSize
+from PyQt6.QtGui import QIcon, QPixmap
+from PyQt6.QtCore import QSize, Qt
 
 import os
 
@@ -35,6 +32,7 @@ class SecondaryWindow(QMainWindow):
         self.input1.setPlaceholderText("FUR CODE")
         self.input2 = QLineEdit()
         self.input2.setPlaceholderText("Quantity")
+        self.input1.returnPressed.connect(self.search_furcode)
 
         self.label_info1 = QLabel("<b>Name:</b> -")
         self.label_info2 = QLabel("<b>Category:</b> -")
@@ -83,31 +81,67 @@ class SecondaryWindow(QMainWindow):
         self.table.setHorizontalHeaderLabels(["FUR CODE", "STOCK", "ZONE", "ENVIRONMENT"])
         self.table.setAlternatingRowColors(True)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+
+        self.table.currentCellChanged.connect(self.highlight_selected_row)
+        self.table.currentCellChanged.connect(self.on_cell_clicked)
+        self.table.cellClicked.connect(self.on_cell_clicked)
 
         header = self.table.horizontalHeader()
-
-        # Ajuste de columnas:
-        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)  # FUR CODE
-        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Fixed)    # STOCK
-        header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)  # ZONE
-        header.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)  # ENVIRONMENT
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)    
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Fixed)
+        header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
 
         self.table.setColumnWidth(0, 150)
         self.table.setColumnWidth(1, 100)  
 
+        def _initStyleOption(self, option, index):
+            QStyledItemDelegate.initStyleOption(self, option, index)
+            option.displayAlignment = Qt.AlignmentFlag.AlignCenter
 
-        class CenterDelegate(QStyledItemDelegate):
-            def initStyleOption(self, option, index):
-                super().initStyleOption(option, index)
-                option.displayAlignment = Qt.AlignmentFlag.AlignCenter
+        CenterDelegate = type(
+            "CenterDelegate",
+            (QStyledItemDelegate,),
+            {"initStyleOption": _initStyleOption}
+        )
 
         self.table.setItemDelegate(CenterDelegate(self.table))
+
+        # Cargar datos en tabla
+        self.load_inventory_data()
+
         main_layout.addLayout(top_layout)
         main_layout.addWidget(self.table)
 
-        self.load_inventory_data()
+        self.table.setStyleSheet("""
+        QTableWidget::item:selected {
+            background-color: #6B968F;   /* fondo fila seleccionada */
+        }
+    """)
+
+
+    def highlight_selected_row(self, currentRow, currentColumn, previousRow, previousColumn):
+        # Restaurar fila anterior
+        if previousRow >= 0:
+            for col in range(self.table.columnCount()):
+                item = self.table.item(previousRow, col)
+                if item:
+                    font = item.font()
+                    font.setBold(False)
+                    item.setFont(font)
+        # Aplicar estilo a fila actual
+        if currentRow >= 0:
+            for col in range(self.table.columnCount()):
+                item = self.table.item(currentRow, col)
+                if item:
+                    font = item.font()
+                    font.setBold(True)
+                    item.setFont(font)
+
 
     def load_inventory_data(self):
+        self.table.setSortingEnabled(False)
         try:
             self.data = iv.load_inventory(self.excel_path)
         except Exception as e:
@@ -122,6 +156,25 @@ class SecondaryWindow(QMainWindow):
             self.table.setItem(row_position, 2, QTableWidgetItem(" - ".join(data["zones"])))
             self.table.setItem(row_position, 3, QTableWidgetItem(" - ".join(data["envs"])))
         self.table.cellClicked.connect(self.on_cell_clicked)
+        self.table.setSortingEnabled(True)
+        self.table.sortItems(0, Qt.SortOrder.AscendingOrder)
+
+    def search_furcode(self):
+        fur_code = self.input1.text().strip()
+        if not fur_code:
+            return
+        found_items = self.table.findItems(fur_code, Qt.MatchFlag.MatchExactly)
+        if found_items:
+            item = found_items[0]
+            row = item.row()
+            self.table.selectRow(row)
+            self.table.scrollToItem(item)
+            self.on_cell_clicked(row, 0)
+            self.input2.setFocus()  # Mueve el foco al input2
+            
+        else:
+            QMessageBox.warning(self, "Not Found", f"⚠️FUR CODE '{fur_code}' not found in the inventory.")
+            print(f"⚠️ FUR CODE {fur_code} no encontrado")
 
     
     def actualizar_stock(self, sumar=True):
@@ -164,7 +217,7 @@ class SecondaryWindow(QMainWindow):
             else:
                 print("Cannot substract.")
                 return
-
+    
     def on_cell_clicked(self, row, col):
         fur_code_item = self.table.item(row, 0)
         if not fur_code_item:
@@ -199,27 +252,26 @@ class SecondaryWindow(QMainWindow):
             self.image_label.setPixmap(QPixmap())
 
     def modificar_stock(self, modo: str):
-        fur_code = self.input1.text().strip()
-        cantidad_texto = self.input2.text().strip()
-        if not fur_code or not cantidad_texto.isdigit():
-            QMessageBox.warning(self, "Error", "You must use a valid FUR CODE or quantity.")
+        try:
+            fur_code = self.input1.text().strip()
+            cantidad_texto = self.input2.text().strip()
+            if not fur_code or not cantidad_texto.isdigit() or int(cantidad_texto) < 1:
+                QMessageBox.warning(self, "Error", "You must use a valid FUR CODE or quantity.")
+                self.input2.clear()
+                return
+            cantidad = int(cantidad_texto)
+            dialogo = CustomReasonDialog(modo=modo, fur_code=fur_code, cantidad=cantidad)
+        except ValueError:
+            QMessageBox.warning(self, "Error", "Invalid quantity. Please enter a valid number.")
+            self.input2.clear()
             return
-        cantidad = int(cantidad_texto)
-        dialogo = CustomReasonDialog(modo=modo, fur_code=fur_code, cantidad=cantidad)
         if dialogo.exec():
             razon = dialogo.get_reason()
             if not razon:
                 QMessageBox.warning(self, "Error", "You must select a reason.")
                 return
-            mensaje = (f"Do you want to {modo.upper()}\n\nFUR CODE: {fur_code}\nQuantity: {cantidad}\nReason: {razon}\n")
-            respuesta = QMessageBox.question(
-                self,
-                "Confirm",
-                mensaje,
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-            )
-
-            if respuesta == QMessageBox.StandardButton.Yes:
+            print(dialogo.ok)
+            if dialogo.ok:
                 self.razon_actual = razon
                 self.actualizar_excel(
                     fur_code=fur_code,

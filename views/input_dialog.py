@@ -1,16 +1,40 @@
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QLabel, QComboBox, QDialogButtonBox, QMessageBox
 )
+from PyQt6.QtGui import QPixmap
+from PyQt6.QtCore import Qt
+import os
 
 class CustomReasonDialog(QDialog):
-    def __init__(self, modo: str, fur_code: str, cantidad: str):
-        super().__init__()
+    def __init__(self, modo: str, fur_code: str, cantidad: str, parent=None):
+        super().__init__(parent)
+
+        self.fur_code = fur_code
+        self.cantidad = cantidad
+        self.modo = modo
 
         self.setWindowTitle("Add" if modo == "add" else "Subtract")
         self.setMinimumWidth(350)
 
         layout = QVBoxLayout(self)
 
+        # --- Imagen basada en FUR CODE ---
+        self.image_label = QLabel()
+        self.image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        image_path = os.path.join("src", "table_layouts", f"{fur_code}.jpg")  # o .png según tus imágenes
+        if os.path.exists(image_path):
+            pixmap = QPixmap(image_path)
+            self.image_label.setPixmap(pixmap.scaled(
+                self.image_label.size(),
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation
+            ))
+        else:
+            self.image_label.setText("No image available")
+        
+        layout.addWidget(self.image_label)
+
+        # --- Etiquetas con FUR CODE y cantidad ---
         label_fur = QLabel(f"FUR CODE: {fur_code}")
         label_cantidad = QLabel(f"Quantity: {cantidad}")
         label_info = QLabel("Please select a reason:")
@@ -28,19 +52,40 @@ class CustomReasonDialog(QDialog):
         layout.addWidget(label_info)
         layout.addWidget(self.combo_reason)
 
+        # --- Botones OK / Cancel ---
         botones = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
-        botones.accepted.connect(self.validar_y_aceptar)
+        botones.accepted.connect(self.mostrar_confirmacion)
         botones.rejected.connect(self.reject)
 
         layout.addWidget(botones)
 
-    def validar_y_aceptar(self):
+    def mostrar_confirmacion(self):
+        # Validación de combo
         if self.combo_reason.currentIndex() == 0:
-            QMessageBox.warning(self, "Error", "invalid option.")
+            QMessageBox.warning(self, "Error", "Invalid option.")
             return
-        self.accept()
+
+        # Crear messagebox de confirmación
+        msg = QMessageBox(self)  # padre = este diálogo, para que no desaparezca
+        msg.setWindowTitle("Confirm")
+        msg.setText(f"Do you want to {self.modo.upper()}?\n\n"
+                    f"FUR CODE: {self.fur_code}\n"
+                    f"Quantity: {self.cantidad}\n"
+                    f"Reason: {self.combo_reason.currentText()}")
+        msg.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        msg.buttonClicked.connect(self.procesar_respuesta)
+        msg.open()
+
+    def procesar_respuesta(self, button):
+        # Si el usuario confirma
+        if button.text() == "&Yes" or button.text() == "Yes":  # según el idioma del SO
+            self.ok = True
+            self.accept()  # cierra este diálogo
+        else:
+            # Si cancela, solo retorna y mantiene abierto
+            pass
 
     def get_reason(self):
         return self.combo_reason.currentText()
