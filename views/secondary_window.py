@@ -7,7 +7,7 @@ from views.input_dialog import CustomReasonDialog
 from controllers.inventory_controller import InventoryController as iv
 from PyQt6.QtWidgets import QStyledItemDelegate
 
-from PyQt6.QtGui import QIcon, QPixmap
+from PyQt6.QtGui import QIcon, QPixmap, QColor, QBrush
 from PyQt6.QtCore import QSize, Qt
 
 import os
@@ -16,7 +16,7 @@ class SecondaryWindow(QMainWindow):
     def __init__(self):
         super().__init__()
 
-        self.setWindowTitle("EvoRCK")
+        self.setWindowTitle("EvoRck")
         self.setGeometry(100, 100, 1200, 600)
 
         main_widget = QWidget()
@@ -41,6 +41,7 @@ class SecondaryWindow(QMainWindow):
 
         self.button1 = QPushButton()
         self.button2 = QPushButton()
+        self.button3 = QPushButton("Load Inventory")
 
         icon_size = QSize(70, 70)
 
@@ -52,21 +53,24 @@ class SecondaryWindow(QMainWindow):
         self.button2.setIconSize(icon_size)
         self.button2.setFixedSize(icon_size)
 
+        self.button3.setFixedSize(160, 40)
+
         self.button1.clicked.connect(lambda: self.modificar_stock("add"))
         self.button2.clicked.connect(lambda: self.modificar_stock("substract"))
+        self.button3.clicked.connect(self.save_inventory_path)
 
         button_layout = QHBoxLayout()
         button_layout.setContentsMargins(0, 0, 0, 0)
         button_layout.setSpacing(10)
         button_layout.addWidget(self.button1)
         button_layout.addWidget(self.button2)
+        button_layout.addWidget(self.button3)
 
         for widget in [self.input1, self.input2, self.label_info1, self.label_info2, self.label_info3, self.label_info4]:
             left_layout.addWidget(widget)
 
         left_layout.addLayout(button_layout)
 
-        self.excel_path = "src/rcklyt.xlsx"  ### Ruta del archivo de
 
         self.image_label = QLabel("Table Layout")
         self.image_label.setFixedSize(600, 250)
@@ -119,10 +123,13 @@ class SecondaryWindow(QMainWindow):
             background-color: #6B968F;   /* fondo fila seleccionada */
         }
     """)
+        self.stock_qty = None
 
+    def save_inventory_path(self):
+        iv.change_file_path()
+        self.load_inventory_data()
 
-    def highlight_selected_row(self, currentRow, currentColumn, previousRow, previousColumn):
-        # Restaurar fila anterior
+    def highlight_selected_row(self, currentRow, previousRow):
         if previousRow >= 0:
             for col in range(self.table.columnCount()):
                 item = self.table.item(previousRow, col)
@@ -139,22 +146,35 @@ class SecondaryWindow(QMainWindow):
                     font.setBold(True)
                     item.setFont(font)
 
-
     def load_inventory_data(self):
         self.table.setSortingEnabled(False)
         try:
-            self.data = iv.load_inventory(self.excel_path)
+            self.data, self.excel_path = iv.load_inventory(self)
         except Exception as e:
             print(f"Error cargando inventario: {e}")
             return
+
         self.table.setRowCount(0)
+
         for fur_code, data in self.data.items():
             row_position = self.table.rowCount()
             self.table.insertRow(row_position)
-            self.table.setItem(row_position, 0, QTableWidgetItem(fur_code))
-            self.table.setItem(row_position, 1, QTableWidgetItem(str(data["stock"])))
-            self.table.setItem(row_position, 2, QTableWidgetItem(" - ".join(data["zones"])))
-            self.table.setItem(row_position, 3, QTableWidgetItem(" - ".join(data["envs"])))
+
+            # crear items
+            fur_item = QTableWidgetItem(fur_code)
+            stock_item = QTableWidgetItem(str(data["stock"]))
+            zone_item = QTableWidgetItem(" - ".join(data["zones"]))
+            env_item = QTableWidgetItem(" - ".join(data["envs"]))
+
+            # aplicar color azul a la celda stock
+            stock_item.setBackground(QBrush(QColor(135, 206, 250)))  # azul claro
+
+            # asignar items a la fila
+            self.table.setItem(row_position, 0, fur_item)
+            self.table.setItem(row_position, 1, stock_item)
+            self.table.setItem(row_position, 2, zone_item)
+            self.table.setItem(row_position, 3, env_item)
+
         self.table.cellClicked.connect(self.on_cell_clicked)
         self.table.setSortingEnabled(True)
         self.table.sortItems(0, Qt.SortOrder.AscendingOrder)
@@ -171,52 +191,51 @@ class SecondaryWindow(QMainWindow):
             self.table.scrollToItem(item)
             self.on_cell_clicked(row, 0)
             self.input2.setFocus()  # Mueve el foco al input2
-            
         else:
             QMessageBox.warning(self, "Not Found", f"⚠️FUR CODE '{fur_code}' not found in the inventory.")
             print(f"⚠️ FUR CODE {fur_code} no encontrado")
 
     
-    def actualizar_stock(self, sumar=True):
-        dialogo = CustomReasonDialog()
-        if dialogo.exec():
-            datos = dialogo.get_data()
-            self.label_info1.setText(f"<b>Name:</b> {datos['nombre']}")
-            self.label_info2.setText(f"<b>Category:</b> {datos['categoria']}")
-            self.label_info3.setText(f"<b>Location:</b> {datos['ubicacion']}")
-        fur_code = self.input1.text().strip()
-        cantidad_texto = self.input2.text().strip()
+    # def actualizar_stock(self, sumar=True):
+    #     dialogo = CustomReasonDialog()
+    #     if dialogo.exec():
+    #         datos = dialogo.get_data()
+    #         self.label_info1.setText(f"<b>Name:</b> {datos['nombre']}")
+    #         self.label_info2.setText(f"<b>Category:</b> {datos['categoria']}")
+    #         self.label_info3.setText(f"<b>Location:</b> {datos['ubicacion']}")
+    #     fur_code = self.input1.text().strip()
+    #     cantidad_texto = self.input2.text().strip()
 
-        if not fur_code or not cantidad_texto.isdigit():
-            return
+    #     if not fur_code or not cantidad_texto.isdigit():
+    #         return
 
-        cantidad = int(cantidad_texto)
+    #     cantidad = int(cantidad_texto)
 
-        fila_encontrada = -1
-        for row in range(self.table.rowCount()):
-            if self.table.item(row, 0).text() == fur_code:
-                fila_encontrada = row
-                break
+    #     fila_encontrada = -1
+    #     for row in range(self.table.rowCount()):
+    #         if self.table.item(row, 0).text() == fur_code:
+    #             fila_encontrada = row
+    #             break
 
-        if fila_encontrada >= 0:
-            stock_item = self.table.item(fila_encontrada, 1)
-            stock_actual = int(stock_item.text()) if stock_item else 0
+    #     if fila_encontrada >= 0:
+    #         stock_item = self.table.item(fila_encontrada, 1)
+    #         stock_actual = int(stock_item.text()) if stock_item else 0
 
-            nuevo_stock = stock_actual + cantidad if sumar else stock_actual - cantidad
-            nuevo_stock = max(nuevo_stock, 0)
+    #         nuevo_stock = stock_actual + cantidad if sumar else stock_actual - cantidad
+    #         nuevo_stock = max(nuevo_stock, 0)
 
-            self.table.setItem(fila_encontrada, 1, QTableWidgetItem(str(nuevo_stock)))
-        else:
-            if sumar:
-                nueva_fila = self.table.rowCount()
-                self.table.insertRow(nueva_fila)
-                self.table.setItem(nueva_fila, 0, QTableWidgetItem(fur_code))
-                self.table.setItem(nueva_fila, 1, QTableWidgetItem(str(cantidad)))
-                self.table.setItem(nueva_fila, 2, QTableWidgetItem("-"))
-                self.table.setItem(nueva_fila, 3, QTableWidgetItem("-"))
-            else:
-                print("Cannot substract.")
-                return
+    #         self.table.setItem(fila_encontrada, 1, QTableWidgetItem(str(nuevo_stock)))
+    #     else:
+    #         if sumar:
+    #             nueva_fila = self.table.rowCount()
+    #             self.table.insertRow(nueva_fila)
+    #             self.table.setItem(nueva_fila, 0, QTableWidgetItem(fur_code))
+    #             self.table.setItem(nueva_fila, 1, QTableWidgetItem(str(cantidad)))
+    #             self.table.setItem(nueva_fila, 2, QTableWidgetItem("-"))
+    #             self.table.setItem(nueva_fila, 3, QTableWidgetItem("-"))
+    #         else:
+    #             print("Cannot substract.")
+    #             return
     
     def on_cell_clicked(self, row, col):
         fur_code_item = self.table.item(row, 0)
@@ -229,6 +248,9 @@ class SecondaryWindow(QMainWindow):
         mesas = data.get("tables", [])
         zonas = data.get("zones", [])
         entornos = data.get("envs", [])
+        self.stock_qty = None
+        self.stock_qty = data.get("stock", 0)
+        print(f"Stock qty: {self.stock_qty}")
 
         self.label_info1.setText(f"<b>Name:</b> {fur_code}")
         self.label_info2.setWordWrap(True)
@@ -259,6 +281,10 @@ class SecondaryWindow(QMainWindow):
                 QMessageBox.warning(self, "Error", "You must use a valid FUR CODE or quantity.")
                 self.input2.clear()
                 return
+            if modo == "substract" and (self.stock_qty - int(cantidad_texto)) < 0:
+                QMessageBox.warning(self, "Error", "You can not substract items under 0.")
+                
+                return            
             cantidad = int(cantidad_texto)
             dialogo = CustomReasonDialog(modo=modo, fur_code=fur_code, cantidad=cantidad)
         except ValueError:

@@ -21,7 +21,7 @@ class CustomReasonDialog(QDialog):
         # --- Imagen basada en FUR CODE ---
         self.image_label = QLabel()
         self.image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        image_path = os.path.join("src", "table_layouts", f"{fur_code}.jpg")  # o .png según tus imágenes
+        image_path = os.path.join("src", "table_layouts", f"{fur_code}.jpg")
         if os.path.exists(image_path):
             pixmap = QPixmap(image_path)
             self.image_label.setPixmap(pixmap.scaled(
@@ -34,7 +34,6 @@ class CustomReasonDialog(QDialog):
         
         layout.addWidget(self.image_label)
 
-        # --- Etiquetas con FUR CODE y cantidad ---
         label_fur = QLabel(f"FUR CODE: {fur_code}")
         label_cantidad = QLabel(f"Quantity: {cantidad}")
         label_info = QLabel("Please select a reason:")
@@ -52,7 +51,6 @@ class CustomReasonDialog(QDialog):
         layout.addWidget(label_info)
         layout.addWidget(self.combo_reason)
 
-        # --- Botones OK / Cancel ---
         botones = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
@@ -62,12 +60,10 @@ class CustomReasonDialog(QDialog):
         layout.addWidget(botones)
 
     def mostrar_confirmacion(self):
-        # Validación de combo
         if self.combo_reason.currentIndex() == 0:
             QMessageBox.warning(self, "Error", "Invalid option.")
             return
 
-        # Crear messagebox de confirmación
         msg = QMessageBox(self)  # padre = este diálogo, para que no desaparezca
         msg.setWindowTitle("Confirm")
         msg.setText(f"Do you want to {self.modo.upper()}?\n\n"
@@ -79,10 +75,9 @@ class CustomReasonDialog(QDialog):
         msg.open()
 
     def procesar_respuesta(self, button):
-        # Si el usuario confirma
-        if button.text() == "&Yes" or button.text() == "Yes":  # según el idioma del SO
+        if button.text() == "&Yes" or button.text() == "Yes":
             self.ok = True
-            self.accept()  # cierra este diálogo
+            self.accept() 
         else:
             # Si cancela, solo retorna y mantiene abierto
             pass

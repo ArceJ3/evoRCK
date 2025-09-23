@@ -1,11 +1,70 @@
 # controllers/inventory_controller.py
-import openpyxl
-from PyQt6.QtWidgets import QMessageBox
+import openpyxl, os, json
+from PyQt6.QtWidgets import QMessageBox, QFileDialog
+
+def get_config_path():
+        """Devuelve la ruta del archivo config.json dentro de ProgramData\evoRck"""
+        
+        program_data = os.environ.get("ProgramData")  # C:\ProgramData
+        if not program_data:
+            raise EnvironmentError("No se pudo encontrar la carpeta ProgramData")
+
+        evoRck_dir = os.path.join(program_data, "evoRck")
+        
+        if not os.path.exists(evoRck_dir):
+            os.makedirs(evoRck_dir, exist_ok=True)
+        config_path = os.path.join(evoRck_dir, "config.json")
+        return config_path
+
+def load_inventory_path():
+        config_path = get_config_path()
+        if os.path.exists(config_path):
+            with open(config_path, "r") as f:
+                try:
+                    data = json.load(f)
+                    return data.get("inventory_path", None)
+                except json.JSONDecodeError:
+                    return None
+        return None
+
+def save_inventory_path(file_path):
+        config_path = get_config_path()
+        data = {"inventory_path": file_path}
+        
+        with open(config_path, "w") as f:
+            json.dump(data, f)
+
+def ask_file_path():
+        file_path, _ = QFileDialog.getOpenFileName(
+                None,
+                "Seleccionar archivo de inventario",
+                "",
+                "Archivos Excel (*.xlsx *.xls)"
+            )
+        if not file_path:
+                QMessageBox.warning(None, "Cancelado", "No se seleccionó ningún archivo.")
+                return {}  # Retornar vacío si canceló
+        save_inventory_path(file_path)
+        return file_path
 
 class InventoryController:
 
-    def load_inventory(file_path, sheet_name="Tables"):
-        """Carga y agrupa datos del inventario desde Excel."""
+
+    def change_file_path():
+        ask_file_path()
+
+    def load_inventory(self, sheet_name="Stock"):
+        """Carga y agrupa datos del inventario desde Excel, usando persistencia de la ruta."""
+
+        # --- Usar ruta guardada si existe ---
+        file_path = load_inventory_path()
+
+        # Si no hay ruta o el archivo no existe, pedir al usuario
+        if not file_path or not os.path.exists(file_path):
+            file_path,= ask_file_path()
+        self.inventory_path = file_path
+
+        # Abrir workbook
         wb = openpyxl.load_workbook(file_path, data_only=True)
         if sheet_name not in wb.sheetnames:
             raise ValueError(f"La hoja '{sheet_name}' no existe en {file_path}")
@@ -57,7 +116,7 @@ class InventoryController:
                 "tables": mesas
             }
 
-        return agrupado
+        return agrupado, self.inventory_path
 
 
     def actualizar_excel(self, path, fur_code: str, cantidad: int, sumar: bool):
