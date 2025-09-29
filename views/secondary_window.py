@@ -42,6 +42,7 @@ class SecondaryWindow(QMainWindow):
         self.button1 = QPushButton()
         self.button2 = QPushButton()
         self.button3 = QPushButton("Load Inventory")
+        self.button4 = QPushButton("Add New Items")
 
         icon_size = QSize(70, 70)
 
@@ -53,11 +54,13 @@ class SecondaryWindow(QMainWindow):
         self.button2.setIconSize(icon_size)
         self.button2.setFixedSize(icon_size)
 
-        self.button3.setFixedSize(160, 40)
-
-        self.button1.clicked.connect(lambda: self.modificar_stock("add"))
-        self.button2.clicked.connect(lambda: self.modificar_stock("substract"))
+        self.button3.setFixedSize(130, 30)
+        self.button4.setFixedSize(130, 30)
+        
+        self.button1.clicked.connect(lambda: self.modify_stock("add"))
+        self.button2.clicked.connect(lambda: self.modify_stock("substract"))
         self.button3.clicked.connect(self.save_inventory_path)
+        self.button4.clicked.connect(lambda: self.modify_stock("add_new"))
 
         button_layout = QHBoxLayout()
         button_layout.setContentsMargins(0, 0, 0, 0)
@@ -65,12 +68,12 @@ class SecondaryWindow(QMainWindow):
         button_layout.addWidget(self.button1)
         button_layout.addWidget(self.button2)
         button_layout.addWidget(self.button3)
+        button_layout.addWidget(self.button4)
 
         for widget in [self.input1, self.input2, self.label_info1, self.label_info2, self.label_info3, self.label_info4]:
             left_layout.addWidget(widget)
 
         left_layout.addLayout(button_layout)
-
 
         self.image_label = QLabel("Table Layout")
         self.image_label.setFixedSize(600, 250)
@@ -89,7 +92,6 @@ class SecondaryWindow(QMainWindow):
 
         self.table.currentCellChanged.connect(self.highlight_selected_row)
         self.table.currentCellChanged.connect(self.on_cell_clicked)
-        self.table.cellClicked.connect(self.on_cell_clicked)
 
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)    
@@ -120,7 +122,7 @@ class SecondaryWindow(QMainWindow):
 
         self.table.setStyleSheet("""
         QTableWidget::item:selected {
-            background-color: #6B968F;   /* fondo fila seleccionada */
+            background-color: #6B968F;
         }
     """)
         self.stock_qty = None
@@ -175,27 +177,9 @@ class SecondaryWindow(QMainWindow):
             self.table.setItem(row_position, 2, zone_item)
             self.table.setItem(row_position, 3, env_item)
 
-        self.table.cellClicked.connect(self.on_cell_clicked)
         self.table.setSortingEnabled(True)
         self.table.sortItems(0, Qt.SortOrder.AscendingOrder)
 
-    def search_furcode(self):
-        fur_code = self.input1.text().strip()
-        if not fur_code:
-            return
-        found_items = self.table.findItems(fur_code, Qt.MatchFlag.MatchExactly)
-        if found_items:
-            item = found_items[0]
-            row = item.row()
-            self.table.selectRow(row)
-            self.table.scrollToItem(item)
-            self.on_cell_clicked(row, 0)
-            self.input2.setFocus()  # Mueve el foco al input2
-        else:
-            QMessageBox.warning(self, "Not Found", f"⚠️FUR CODE '{fur_code}' not found in the inventory.")
-            print(f"⚠️ FUR CODE {fur_code} no encontrado")
-
-    
     # def actualizar_stock(self, sumar=True):
     #     dialogo = CustomReasonDialog()
     #     if dialogo.exec():
@@ -241,7 +225,6 @@ class SecondaryWindow(QMainWindow):
         fur_code_item = self.table.item(row, 0)
         if not fur_code_item:
             return
-
         fur_code = fur_code_item.text().strip()
         self.input1.setText(fur_code)
         data = self.data.get(fur_code, {})
@@ -251,7 +234,6 @@ class SecondaryWindow(QMainWindow):
         self.stock_qty = None
         self.stock_qty = data.get("stock", 0)
         print(f"Stock qty: {self.stock_qty}")
-
         self.label_info1.setText(f"<b>Name:</b> {fur_code}")
         self.label_info2.setWordWrap(True)
         self.label_info2.setText(f"<b>Tables:</b> ({len(mesas)}):\n{', '.join(mesas)}")
@@ -273,20 +255,53 @@ class SecondaryWindow(QMainWindow):
             self.image_label.setText("No image available")
             self.image_label.setPixmap(QPixmap())
 
-    def modificar_stock(self, modo: str):
+
+    def clear_fields(self):
+        self.input1.clear()
+        self.input2.clear()
+        self.image_label.setText("No image available")
+        self.stock_qty = None
+
+    def search_furcode(self, mode=None):
+        fur_code = self.input1.text().strip()
+        if not fur_code:
+            return False
+        found_items = self.table.findItems(fur_code, Qt.MatchFlag.MatchExactly)
+        if found_items:
+            item = found_items[0]
+            row = item.row()
+            self.table.selectRow(row)
+            self.table.scrollToItem(item)
+            self.input2.setFocus()
+            return item.text()
+        if mode == "add_new":
+            return False
+        else:
+            QMessageBox.warning(self, "Not Found", f"SEARCH FUR CODE '{fur_code}' not found in the inventory.")
+            return False
+    
+
+    def modify_stock(self, mode: str):
+        fur_code = self.input1.text().strip()
+        cantidad_texto = self.input2.text().strip()
+        match = self.search_furcode(mode)
+        if match is False and mode != "add_new":
+            self.clear_fields()
+            return
+        elif match == fur_code and mode == "add_new":
+            QMessageBox.warning(self, "Error", f"FUR CODE '{fur_code}' already exists in the inventory.")
+            self.clear_fields()
+            return
         try:
-            fur_code = self.input1.text().strip()
-            cantidad_texto = self.input2.text().strip()
             if not fur_code or not cantidad_texto.isdigit() or int(cantidad_texto) < 1:
                 QMessageBox.warning(self, "Error", "You must use a valid FUR CODE or quantity.")
                 self.input2.clear()
                 return
-            if modo == "substract" and (self.stock_qty - int(cantidad_texto)) < 0:
+            if mode == "substract" and (self.stock_qty - int(cantidad_texto)) < 0:
                 QMessageBox.warning(self, "Error", "You can not substract items under 0.")
-                
-                return            
+                return
             cantidad = int(cantidad_texto)
-            dialogo = CustomReasonDialog(modo=modo, fur_code=fur_code, cantidad=cantidad)
+            dialogo = CustomReasonDialog(mode=mode, fur_code=fur_code, cantidad=cantidad)
         except ValueError:
             QMessageBox.warning(self, "Error", "Invalid quantity. Please enter a valid number.")
             self.input2.clear()
@@ -296,14 +311,15 @@ class SecondaryWindow(QMainWindow):
             if not razon:
                 QMessageBox.warning(self, "Error", "You must select a reason.")
                 return
-            print(dialogo.ok)
             if dialogo.ok:
                 self.razon_actual = razon
                 self.actualizar_excel(
                     fur_code=fur_code,
                     cantidad=cantidad,
-                    sumar=(modo == "add")
+                    sumar=(mode == "add")
                 )
+        self.clear_fields()
+
 
     def actualizar_excel(self, fur_code: str, cantidad: int, sumar: bool):
         iv.actualizar_excel(self, self.excel_path, fur_code, cantidad, sumar)

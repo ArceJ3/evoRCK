@@ -6,14 +6,14 @@ from PyQt6.QtCore import Qt
 import os
 
 class CustomReasonDialog(QDialog):
-    def __init__(self, modo: str, fur_code: str, cantidad: str, parent=None):
+    def __init__(self, mode: str, fur_code: str, cantidad: str, parent=None):
         super().__init__(parent)
 
         self.fur_code = fur_code
         self.cantidad = cantidad
-        self.modo = modo
-
-        self.setWindowTitle("Add" if modo == "add" else "Subtract")
+        self.mode = mode
+    
+        self.setWindowTitle(f"{mode}")
         self.setMinimumWidth(350)
 
         layout = QVBoxLayout(self)
@@ -41,9 +41,9 @@ class CustomReasonDialog(QDialog):
 
         self.combo_reason = QComboBox()
         self.combo_reason.addItem("--- Select a reason ---")
-        if modo == "add":
+        if mode == "add" or mode == "add_new":
             self.combo_reason.addItems(["PUR", "PROJECT"])
-        elif modo == "substract":
+        elif mode == "substract":
             self.combo_reason.addItems(["MAINTENANCE", "SCHEDULED", "MIGRATION"])
 
         layout.addWidget(label_fur)
@@ -56,7 +56,6 @@ class CustomReasonDialog(QDialog):
         )
         botones.accepted.connect(self.mostrar_confirmacion)
         botones.rejected.connect(self.reject)
-
         layout.addWidget(botones)
 
     def mostrar_confirmacion(self):
@@ -66,7 +65,7 @@ class CustomReasonDialog(QDialog):
 
         msg = QMessageBox(self)  # padre = este diálogo, para que no desaparezca
         msg.setWindowTitle("Confirm")
-        msg.setText(f"Do you want to {self.modo.upper()}?\n\n"
+        msg.setText(f"Do you want to {self.mode.upper()}?\n\n"
                     f"FUR CODE: {self.fur_code}\n"
                     f"Quantity: {self.cantidad}\n"
                     f"Reason: {self.combo_reason.currentText()}")
